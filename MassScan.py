@@ -5,14 +5,15 @@ import time
 import re
 import mcstatus
 import termcolor
-
+import waiting
 scanType = int(input("1 - Spam, 2 - Scan an IP: "))
 server = input("Enter Server IP: ")
 
 port = 1
 threads = []
 tries = 3
-
+WorkingServrs = []
+outputFile = open("results.txt", "w")
 def PingSpecificServer():
     global port
 
@@ -39,8 +40,7 @@ def PingSpecificServer():
 
 
 def PingDomain(targetPort, retries):
-    global tries
-    triesLeft = tries - retries
+    triesLeft = retries - 1
 
     try:
         TargetServer = mcstatus.MinecraftServer.lookup(server + ":" + str(targetPort))
@@ -53,24 +53,44 @@ def PingDomain(targetPort, retries):
             port = result.group(1)
             print(port)
 
+
         termcolor.cprint("Server on " + server + ":"+ str(targetPort) + " replied! it is running on version " + TargetServer.status().version.name, color='green')
+        outputFile.write(server + ":" + str(targetPort) + "\n")
 
-
-    except:
-
-        time.sleep(random.uniform(0.8, 2.5))
+    except socket.timeout:
+        time.sleep(random.uniform(1, 10))
         if targetPort != 1:
-            if triesLeft in locals():
+            if triesLeft > 0:
                 PingDomain(targetPort, triesLeft)
-                print(str(triesLeft) + "left")
+
+    except ConnectionRefusedError:
+        time.sleep(random.uniform(1, 10))
+        if targetPort != 1:
+            if triesLeft > 0:
+                PingDomain(targetPort, triesLeft)
+
+    except ConnectionResetError:
+        time.sleep(random.uniform(1, 10))
+        if targetPort != 1:
+            if triesLeft > 0:
+                PingDomain(targetPort, triesLeft)
+
+    except OSError:
+        time.sleep(random.uniform(1, 10))
+        if targetPort != 1:
+            if triesLeft > 0:
+                PingDomain(targetPort, triesLeft)
+
+
 
 def createThread(times):
     global scanType
     global port
     global tries
 
+
     if scanType == 2:
-        for _ in range(times - 1):
+        for i in range(times - 1):
             t = threading.Thread(target=PingDomain, args=(len(threads) + 1, tries))
             threads.append(t)
             t.start()
@@ -79,7 +99,11 @@ def createThread(times):
         for _ in range(times - 1):
             t = threading.Thread(target=PingSpecificServer)
             threads.append(t)
-            t.start()
+            try:
+                t.start()
+            except:
+                print("slep")
+                time.sleep(3)
 
 
 if scanType == 1:
@@ -90,4 +114,4 @@ elif scanType == 2:
     createThread(65535)
 for thread in threads:
     thread.join()
-
+outputFile.close()
